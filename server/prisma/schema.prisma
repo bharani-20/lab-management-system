@@ -1,0 +1,199 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  FACULTY
+  NON_TEACHING_STAFF
+}
+
+enum SystemStatus {
+  AVAILABLE
+  ACTIVE
+  OFFLINE
+  MAINTENANCE
+}
+
+enum SessionStatus {
+  ACTIVE
+  COMPLETED
+  EXPIRED
+  CANCELLED
+}
+
+enum SyncSource {
+  ONLINE
+  OFFLINE_SYNC
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  name         String
+  role         Role
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Student {
+  id             String   @id @default(cuid())
+  registrationNo String   @unique
+  name           String
+  department     String
+  section        String
+  year           Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  sessions    Session[]
+  attendances Attendance[]
+
+  @@index([registrationNo])
+  @@index([department])
+  @@index([section])
+  @@index([year])
+  @@map("students")
+}
+
+model System {
+  id         String       @id @default(cuid())
+  systemCode String       @unique
+  hostname   String?
+  ipAddress  String?
+  status     SystemStatus @default(AVAILABLE)
+  lastSeenAt DateTime?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  sessions Session[]
+  tickets  Ticket[]
+
+  @@index([status])
+  @@index([systemCode])
+  @@map("systems")
+}
+
+model Session {
+  id                     String        @id @default(cuid())
+  localId                String        @unique
+  studentId              String
+  registrationNoSnapshot String
+  nameSnapshot           String
+  departmentSnapshot     String
+  sectionSnapshot        String
+  yearSnapshot           Int
+  faculty                String?
+  systemId               String
+  durationMinutes        Int
+  startTime              DateTime
+  expectedEndTime        DateTime
+  actualEndTime          DateTime?
+  lastHeartbeatAt        DateTime?
+  status                 SessionStatus @default(ACTIVE)
+  syncSource             SyncSource    @default(ONLINE)
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  student     Student      @relation(fields: [studentId], references: [id])
+  system      System       @relation(fields: [systemId], references: [id])
+  attendances Attendance[]
+
+  @@index([localId])
+  @@index([studentId])
+  @@index([systemId])
+  @@index([startTime])
+  @@index([status])
+  @@index([syncSource])
+  @@map("sessions")
+}
+
+model Timetable {
+  id          String   @id @default(cuid())
+  dayOfWeek   String
+  startTime   String
+  endTime     String
+  department  String
+  section     String
+  year        Int
+  subject     String
+  facultyName String
+  room        String?
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([dayOfWeek])
+  @@index([department])
+  @@index([section])
+  @@index([year])
+  @@map("timetables")
+}
+
+model Attendance {
+  id        String           @id @default(cuid())
+  studentId String
+  date      DateTime
+  status    AttendanceStatus @default(PRESENT)
+  sessionId String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  student Student  @relation(fields: [studentId], references: [id])
+  session Session? @relation(fields: [sessionId], references: [id])
+
+  @@unique([studentId, date])
+  @@index([studentId])
+  @@index([date])
+  @@index([status])
+  @@map("attendances")
+}
+
+model Ticket {
+  id           String       @id @default(cuid())
+  ticketId     String       @unique
+  systemId     String?
+  systemCode   String?
+  category     String
+  description  String
+  status       TicketStatus @default(OPEN)
+  reportedAt   DateTime     @default(now())
+  resolvedAt   DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  system System? @relation(fields: [systemId], references: [id])
+
+  @@index([status])
+  @@index([systemCode])
+  @@index([reportedAt])
+  @@map("tickets")
+}
